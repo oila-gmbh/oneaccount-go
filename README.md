@@ -17,7 +17,7 @@ import (
 )
 
 // The callback URL is the URL you have set when you created One account app.
-// The pattern for the router, callback URL 
+// The pattern for the router, callbackURL passed to SetCallbackURL function
 // and callback URL of the application must be the same.
 func main() {
     http.Handle("/oneaccountauth", oneaccount.New(
@@ -39,6 +39,9 @@ func main() {
         // the same way you can access any other data you requested from the user:
         firstName, _ := data["firstName"]
         // or create a struct to extract the data to
+	// any data returned here would be sent to onAuth function on front-end e.g.:
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]string{"firstName": firstName)
     })))
 }
 ```
