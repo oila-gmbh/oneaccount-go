@@ -46,6 +46,11 @@ func New(options ...option) *OneAccount {
 	} else if oa.Engine == nil {
 		oa.Engine = oa.GetterSetterEngine
 	}
+
+	if oa.CallbackURL == "" {
+		oa.CallbackURL = "oneaccountauth"
+	}
+
 	return &oa
 }
 
