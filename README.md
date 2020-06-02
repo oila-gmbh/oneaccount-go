@@ -4,16 +4,18 @@ This library is a middleware for the golang http router (or any HTTP request mul
 
 Please follow the instructions or official documentations for an integration.
 
+#### NOTE: examples 2 and 3 are the most preferred approach for a production setup
+
 #### Example 1 (In Memory Engine):
 `oneaccount-go` by default uses in memory cache engine if a custom engine is not supplied.
 ```go
 package main
 
 import (
-	"encoding/json"
-	"net/http"
-	"github.com/Kiura/oneaccount-go"
-	"os"
+    "encoding/json"
+    "net/http"
+    "github.com/Kiura/oneaccount-go"
+    "os"
 )
 
 // The callback URL is the URL you have set when you created One account app.
@@ -68,11 +70,11 @@ func main() {
             return redisClient.Set(ctx, k, b, 60 * time.Second).Err()
         }),
         oneaccount.SetEngineGetter(func(ctx context.Context, k string) (interface{}, error) {
-            	v, err := ore.client.Get(ctx, k).Result()
-		if err != nil {
-			return nil, err
-		}
-		return v, ore.client.Del(ctx, k).Err()
+	    v, err := ore.client.Get(ctx, k).Result()
+	    if err != nil {
+		return nil, err
+	    }
+	    return v, ore.client.Del(ctx, k).Err()
         }),
     ).Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if !oneaccount.IsAuthenticated(r) {
@@ -86,29 +88,29 @@ Now our authentication is production ready!
 #### Example 3 (Custom Engine):
 ```go
 type OneaccountRedisEngine struct {
-	client *redis.Client
+    client *redis.Client
 }
 
 func (ore OneaccountRedisEngine) Set(ctx context.Context, k string, v interface{}) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return ore.client.Set(ctx, k, b, 60 * time.Second).Err()
+    b, err := json.Marshal(v)
+    if err != nil {
+        return err
+    }
+    return ore.client.Set(ctx, k, b, 60 * time.Second).Err()
 }
 
 func (ore OneaccountRedisEngine) Get(ctx context.Context, k string) (interface{}, error) {
-	v, err := ore.client.Get(ctx, k).Result()
-	if err != nil {
-		return nil, err
-	}
-	return v, ore.client.Del(ctx, k).Err()
+    v, err := ore.client.Get(ctx, k).Result()
+    if err != nil {
+        return nil, err
+    }
+    return v, ore.client.Del(ctx, k).Err()
 }
 
 func NewOneaccountRedisEngine(redisClient *redis.Client) *OneaccountRedisEngine {
-	return &OneaccountRedisEngine{
-		client: redisClient,
-	}
+    return &OneaccountRedisEngine{
+	    client: redisClient,
+    }
 }
 
 func main() {
