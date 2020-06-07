@@ -62,9 +62,9 @@ We will be using redis for these examples: https://github.com/go-redis/redis
 func main() {
 	var redisClient = redis.NewClient(&redis.Options{})
 	
-    http.Handle("/oneaccountauth", oneaccount.New(
-        oneaccount.SetCallbackURL("/oneaccountauth"),
-        oneaccount.SetEngineSetter(func(ctx context.Context, k string, v []byte) error {
+	http.Handle("/oneaccountauth", oneaccount.New(
+		oneaccount.SetCallbackURL("/oneaccountauth"),
+		oneaccount.SetEngineSetter(func(ctx context.Context, k string, v []byte) error {
 			return redisClient.Set(ctx, k, v, 60*time.Second).Err()
 		}),
 		oneaccount.SetEngineGetter(func(ctx context.Context, k string) ([]byte, error) {
@@ -74,11 +74,11 @@ func main() {
 			}
 			return []byte(v), redisClient.Del(ctx, k).Err()
 		}),
-    ).Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        if !oneaccount.IsAuthenticated(r) {
-            return
-        }
-    })))
+	).Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !oneaccount.IsAuthenticated(r) {
+			return
+		}
+	})))
 }
 ```
 Now our authentication is production ready!
