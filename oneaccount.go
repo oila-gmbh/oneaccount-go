@@ -1,14 +1,19 @@
 package oneaccount
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"time"
 )
 
 type contextKey string
+
+// TODO: improve status code messages
 
 const (
 	// DataKey key is used to retrieve data sent by the user on authorization from the request context
@@ -22,18 +27,37 @@ func Data(r *http.Request) []byte {
 	return b
 }
 
-type Setter func(ctx context.Context, k string, v interface{}) error
-type Getter func(ctx context.Context, k string) (interface{}, error)
+type Setter func(ctx context.Context, k string, v []byte) error
+type Getter func(ctx context.Context, k string) ([]byte, error)
 
 type Engine interface {
-	Set(ctx context.Context, k string, v interface{}) error
-	Get(ctx context.Context, k string) (interface{}, error)
+	Set(ctx context.Context, k string, v []byte) error
+	Get(ctx context.Context, k string) ([]byte, error)
 }
 
 type OneAccount struct {
 	Engine             Engine
 	GetterSetterEngine *GetterSetterEngine
+	Client             *http.Client
 	CallbackURL        string
+}
+
+func httpClient() *http.Client {
+	var netTransport = &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 15 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	var netClient = &http.Client{
+		Timeout:   time.Second * 10,
+		Transport: netTransport,
+	}
+	return netClient
 }
 
 func New(options ...option) *OneAccount {
@@ -51,7 +75,51 @@ func New(options ...option) *OneAccount {
 		oa.CallbackURL = "oneaccountauth"
 	}
 
+	if oa.Client == nil {
+		oa.Client = httpClient()
+	}
+
 	return &oa
+}
+
+func (oa *OneAccount) verify(ctx context.Context, token, uuid string) (err error) {
+	var res *http.Response
+	var req *http.Request
+	data, err := json.Marshal(map[string]string{"uuid": uuid})
+	var verifyURL = "https://api.oneaccount.app/widget/verify"
+	req, err = http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, bytes.NewBuffer(data))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "BEARER " + token)
+	res, err = oa.Client.Do(req)
+	if err != nil {
+		return
+	}
+	if res.Body == nil {
+		err = fmt.Errorf("request body is empty")
+		return
+	}
+	defer func() {
+		cerr := res.Body.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+	if res == nil || res.StatusCode != http.StatusOK {
+		err = fmt.Errorf("cannot verify the request")
+		return
+	}
+	type response struct {
+		Success bool `json:"success"`
+	}
+	var resp = response{}
+	err = json.NewDecoder(res.Body).Decode(&resp)
+	if err != nil || !resp.Success {
+		err = fmt.Errorf("cannot verify the request")
+	}
+	return
 }
 
 func (oa *OneAccount) save(ctx context.Context, body io.ReadCloser) error {
@@ -92,7 +160,10 @@ func (oa *OneAccount) authorize(ctx context.Context, r *http.Request, token, uui
 	if err != nil {
 		return nil, fmt.Errorf("engine error: key is not found")
 	}
-	// TODO: verify the token
+	if err := oa.verify(ctx, token, uuid); err != nil {
+		fmt.Println(11, err)
+		return nil, err
+	}
 	return v, nil
 }
 

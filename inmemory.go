@@ -11,7 +11,7 @@ const ExpireTimeDuration = 1 * time.Minute
 
 type AuthorizingUser struct {
 	ExpiresAt time.Time
-	Data      interface{}
+	Data      []byte
 }
 
 type InMemoryEngine struct {
@@ -41,42 +41,42 @@ func NewInMemoryEngine() *InMemoryEngine {
 	return i
 }
 
-func (i *InMemoryEngine) Set(ctx context.Context, k string, v interface{}) error {
+func (i *InMemoryEngine) Set(ctx context.Context, k string, v []byte) error {
 	// we don't need a sophisticated way to handle context here, so we just check
-	// if it is already cancelled and return if it is otherwise ignore context and proceed
+	// if it is already cancelled and return if it is otherwise ignore the context and proceed
 	select {
 	case <-ctx.Done():
 		return nil
 	default:
+		i.Lock()
+		i.AuthorizingUsers[k] = AuthorizingUser{
+			ExpiresAt: time.Now().Add(ExpireTimeDuration),
+			Data:      v,
+		}
+		i.Unlock()
 	}
 
-	i.Lock()
-	i.AuthorizingUsers[k] = AuthorizingUser{
-		ExpiresAt: time.Now().Add(ExpireTimeDuration),
-		Data:      v,
-	}
-	i.Unlock()
 	return nil
 }
 
-func (i *InMemoryEngine) Get(ctx context.Context, k string) (interface{}, error) {
+func (i *InMemoryEngine) Get(ctx context.Context, k string) ([]byte, error) {
 	// we don't need a sophisticated way to handle context here, so we just check
-	// if it is already cancelled and return if it is otherwise ignore context and proceed
+	// if it is already cancelled and return if it is otherwise ignore the context and proceed
 	select {
 	case <-ctx.Done():
 		return nil, nil
 	default:
-	}
-
-	i.RLock()
-	if v, ok := i.AuthorizingUsers[k]; ok {
-		data := v.Data
-		delete(i.AuthorizingUsers, k)
-		if v.ExpiresAt.After(time.Now()) {
-			i.RUnlock()
-			return data, nil
+		i.RLock()
+		v, ok := i.AuthorizingUsers[k]
+		i.RUnlock()
+		if !ok || v.ExpiresAt.Before(time.Now()){
+			return nil, fmt.Errorf("no item found or item expired for key: %s", k)
 		}
+		defer func() {
+			i.Lock()
+			delete(i.AuthorizingUsers, k)
+			i.Unlock()
+		}()
+		return v.Data, nil
 	}
-	i.RUnlock()
-	return "", fmt.Errorf("no item found for key: %s", k)
 }

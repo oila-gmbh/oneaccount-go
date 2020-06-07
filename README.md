@@ -60,22 +60,20 @@ We will be using redis for these examples: https://github.com/go-redis/redis
 #### Example 2 (Custom Engine functions):
 ```go
 func main() {
+	var redisClient = redis.NewClient(&redis.Options{})
+	
     http.Handle("/oneaccountauth", oneaccount.New(
         oneaccount.SetCallbackURL("/oneaccountauth"),
-        oneaccount.SetEngineSetter(func(ctx context.Context, k string, v interface{}) error {
-            b, err := json.Marshal(v)
-            if err != nil {
-                return err
-            }
-            return redisClient.Set(ctx, k, b, 60 * time.Second).Err()
-        }),
-        oneaccount.SetEngineGetter(func(ctx context.Context, k string) (interface{}, error) {
-	    v, err := ore.client.Get(ctx, k).Result()
-	    if err != nil {
-		return nil, err
-	    }
-	    return v, ore.client.Del(ctx, k).Err()
-        }),
+        oneaccount.SetEngineSetter(func(ctx context.Context, k string, v []byte) error {
+			return redisClient.Set(ctx, k, v, 60*time.Second).Err()
+		}),
+		oneaccount.SetEngineGetter(func(ctx context.Context, k string) ([]byte, error) {
+			v, err := redisClient.Get(ctx, k).Result()
+			if err != nil {
+				return nil, err
+			}
+			return []byte(v), redisClient.Del(ctx, k).Err()
+		}),
     ).Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if !oneaccount.IsAuthenticated(r) {
             return
@@ -91,20 +89,16 @@ type OneaccountRedisEngine struct {
     client *redis.Client
 }
 
-func (ore OneaccountRedisEngine) Set(ctx context.Context, k string, v interface{}) error {
-    b, err := json.Marshal(v)
-    if err != nil {
-        return err
-    }
-    return ore.client.Set(ctx, k, b, 60 * time.Second).Err()
+func (ore OneaccountRedisEngine) Set(ctx context.Context, k string, v []byte) error {
+    return ore.client.Set(ctx, k, v, 60 * time.Second).Err()
 }
 
-func (ore OneaccountRedisEngine) Get(ctx context.Context, k string) (interface{}, error) {
+func (ore OneaccountRedisEngine) Get(ctx context.Context, k string) ([]byte, error) {
     v, err := ore.client.Get(ctx, k).Result()
     if err != nil {
         return nil, err
     }
-    return v, ore.client.Del(ctx, k).Err()
+    return []byte(v), ore.client.Del(ctx, k).Err()
 }
 
 func NewOneaccountRedisEngine(redisClient *redis.Client) *OneaccountRedisEngine {
@@ -114,11 +108,7 @@ func NewOneaccountRedisEngine(redisClient *redis.Client) *OneaccountRedisEngine 
 }
 
 func main() {
-    var redisClient = redis.NewClient(&redis.Options{
-        Addr:     "localhost:6379",
-        Password: "",
-        DB:       0,
-    })
+    var redisClient = redis.NewClient(&redis.Options{})
     
     http.Handle("/oneaccountauth", oneaccount.New(
         oneaccount.SetCallbackURL("/oneaccountauth"),
