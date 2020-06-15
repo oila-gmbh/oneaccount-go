@@ -14,7 +14,7 @@ package main
 import (
     "encoding/json"
     "net/http"
-    "github.com/Kiura/oneaccount-go"
+    "github.com/oilastudio/oneaccount-go"
     "os"
 )
 
