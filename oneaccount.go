@@ -1,13 +1,13 @@
 package oneaccount
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,6 +16,7 @@ type contextKey string
 // TODO: improve status code messages
 
 const (
+	verifyURL = "https://api.oneaccount.app/widget/verify"
 	// DataKey key is used to retrieve data sent by the user on authorization from the request context
 	DataKey = contextKey("OneAccountData")
 )
@@ -85,14 +86,13 @@ func New(options ...option) *OneAccount {
 func (oa *OneAccount) verify(ctx context.Context, token, uuid string) (err error) {
 	var res *http.Response
 	var req *http.Request
-	data, err := json.Marshal(map[string]string{"uuid": uuid})
-	var verifyURL = "https://api.oneaccount.app/widget/verify"
-	req, err = http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, bytes.NewBuffer(data))
+	data := fmt.Sprintf(`{"uuid": "%s"})`, uuid)
+	req, err = http.NewRequestWithContext(ctx, http.MethodPost, verifyURL, strings.NewReader(data))
 	if err != nil {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "BEARER " + token)
+	req.Header.Set("Authorization", "BEARER "+token)
 	res, err = oa.Client.Do(req)
 	if err != nil {
 		return
@@ -185,7 +185,17 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 			JSON(w, "{success: true}")
 			return
 		}
-		data, err := oa.authorize(ctx, r, token, r.Header.Get("uuid"))
+		type requestBody struct {
+			UUID string `json:"uuid,omitempty"`
+		}
+		body := requestBody{}
+		err = json.NewDecoder(r.Body).Decode(&body)
+		if err != nil {
+			Error(w, err, http.StatusBadRequest)
+			return
+		}
+
+		data, err := oa.authorize(ctx, r, token, body.UUID)
 		if err != nil {
 			Error(w, err, http.StatusBadRequest)
 			return
