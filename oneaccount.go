@@ -40,7 +40,7 @@ type OneAccount struct {
 	Engine             Engine
 	GetterSetterEngine *GetterSetterEngine
 	Client             *http.Client
-	CallbackURL        string
+	CallbackURL        *string
 }
 
 func httpClient() *http.Client {
@@ -70,10 +70,6 @@ func New(options ...option) *OneAccount {
 		oa.Engine = NewInMemoryEngine()
 	} else if oa.Engine == nil {
 		oa.Engine = oa.GetterSetterEngine
-	}
-
-	if oa.CallbackURL == "" {
-		oa.CallbackURL = "oneaccountauth"
 	}
 
 	if oa.Client == nil {
@@ -170,7 +166,7 @@ func (oa *OneAccount) authorize(ctx context.Context, r *http.Request, token, uui
 // Auth handles the authentication
 func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 	hfc := func(w http.ResponseWriter, r *http.Request) {
-		if oa == nil || r.URL.Path != oa.CallbackURL || oa.Engine == nil {
+		if oa == nil || oa.Engine == nil || (oa.CallbackURL != nil && r.URL.Path != *oa.CallbackURL) {
 			next.ServeHTTP(w, r)
 			return
 		}

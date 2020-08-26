@@ -16,7 +16,7 @@ func SetEngine(e Engine) func(oa *OneAccount) {
 
 func SetCallbackURL(callbackURL string) func(oa *OneAccount) {
 	return func(oa *OneAccount) {
-		oa.CallbackURL = callbackURL
+		oa.CallbackURL = &callbackURL
 	}
 }
 
