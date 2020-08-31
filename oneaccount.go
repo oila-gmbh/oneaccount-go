@@ -210,7 +210,7 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 		rBody := requestBody{}
 		err = json.Unmarshal(body, &rBody)
 		if err != nil {
-			oa.error(ctx, fmt.Errorf("cannot decode body: %v", err))
+			oa.error(ctx, fmt.Errorf("cannot decode body, body: %s, err: %v", string(body), err))
 			Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
 			return
 		}
