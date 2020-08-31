@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -121,9 +121,9 @@ func (oa *OneAccount) verify(ctx context.Context, token, uuid string) (err error
 	return
 }
 
-func (oa *OneAccount) save(ctx context.Context, body io.ReadCloser) error {
+func (oa *OneAccount) save(ctx context.Context, body []byte) error {
 	var data map[string]interface{}
-	err := json.NewDecoder(body).Decode(&data)
+	err := json.Unmarshal(body, &data)
 	if err != nil {
 		return fmt.Errorf("cannot parse request body: %v", err)
 	}
@@ -148,7 +148,7 @@ func (oa *OneAccount) save(ctx context.Context, body io.ReadCloser) error {
 	return nil
 }
 
-func (oa *OneAccount) authorize(ctx context.Context, r *http.Request, token, uuid string) (interface{}, error) {
+func (oa *OneAccount) authorize(ctx context.Context, token, uuid string) (interface{}, error) {
 	if token == "" {
 		return nil, fmt.Errorf("empty or wrong bearer token")
 	}
@@ -185,9 +185,17 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		body, err := ioutil.ReadAll(r.Body)
+        if err != nil {
+            oa.error(ctx, fmt.Errorf("cannot decode body,  body: %s, err:%v", string(body), err))
+            Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
+            return
+        }
+
 		token, err := BearerFromHeader(r)
 		if err != nil || token == "" {
-			err := oa.save(ctx, r.Body)
+			err := oa.save(ctx, body)
 			if err != nil {
 				oa.error(ctx, err)
 				Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
@@ -199,15 +207,15 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 		type requestBody struct {
 			UUID string `json:"uuid,omitempty"`
 		}
-		body := requestBody{}
-		err = json.NewDecoder(r.Body).Decode(&body)
+		rBody := requestBody{}
+		err = json.Unmarshal(body, &rBody)
 		if err != nil {
 			oa.error(ctx, fmt.Errorf("cannot decode body: %v", err))
 			Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
 			return
 		}
 
-		data, err := oa.authorize(ctx, r, token, body.UUID)
+		data, err := oa.authorize(ctx, token, rBody.UUID)
 		if err != nil {
 			oa.error(ctx, fmt.Errorf("cannot authorise: %v", err))
 			Error(w, fmt.Errorf("cannot authorise"), http.StatusBadRequest)
