@@ -14,6 +14,7 @@ import (
 type contextKey string
 
 // TODO: improve status code messages
+// TODO: improve reported errors to the user
 
 const (
 	verifyURL = "https://api.oneaccount.app/widget/verify"
@@ -30,6 +31,7 @@ func Data(r *http.Request) []byte {
 
 type Setter func(ctx context.Context, k string, v []byte) error
 type Getter func(ctx context.Context, k string) ([]byte, error)
+type ErrorListener func(ctx context.Context, err error)
 
 type Engine interface {
 	Set(ctx context.Context, k string, v []byte) error
@@ -41,6 +43,7 @@ type OneAccount struct {
 	GetterSetterEngine *GetterSetterEngine
 	Client             *http.Client
 	CallbackURL        *string
+	ErrorListener      ErrorListener
 }
 
 func httpClient() *http.Client {
@@ -122,26 +125,27 @@ func (oa *OneAccount) save(ctx context.Context, body io.ReadCloser) error {
 	var data map[string]interface{}
 	err := json.NewDecoder(body).Decode(&data)
 	if err != nil {
-		return fmt.Errorf("cannot parse request body")
+		return fmt.Errorf("cannot parse request body: %v", err)
 	}
-	if uuid, ok := data["uuid"]; ok {
-		uuid, ok := uuid.(string)
-		if !ok || uuid == "" {
-			return fmt.Errorf("incorrect uuid")
-		}
-		delete(data, "uuid")
-		delete(data, "externalId")
-		b, err := json.Marshal(data)
-		if err != nil {
-			return fmt.Errorf("error marshalling data from body: %v", err)
-		}
-		err = oa.Engine.Set(ctx, uuid, b)
-		if err != nil {
-			return fmt.Errorf("engine error: cannot set")
-		}
-		return nil
+	uuidI, ok := data["uuid"]
+	if !ok {
+		return fmt.Errorf("uuid is required")
 	}
-	return fmt.Errorf("uuid is required")
+	uuid, ok := uuidI.(string)
+	if !ok || uuid == "" {
+		return fmt.Errorf("incorrect uuid: %s", uuid)
+	}
+	delete(data, "uuid")
+	delete(data, "externalId")
+	b, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("error marshalling data from body, err:%v, data: %v", err, data)
+	}
+	err = oa.Engine.Set(ctx, uuid, b)
+	if err != nil {
+		return fmt.Errorf("engine error: cannot set. err: %v, key: %s, value: %s", err, uuid, string(b))
+	}
+	return nil
 }
 
 func (oa *OneAccount) authorize(ctx context.Context, r *http.Request, token, uuid string) (interface{}, error) {
@@ -154,28 +158,39 @@ func (oa *OneAccount) authorize(ctx context.Context, r *http.Request, token, uui
 
 	v, err := oa.Engine.Get(ctx, uuid)
 	if err != nil {
-		return nil, fmt.Errorf("engine error: key is not found")
+		return nil, fmt.Errorf("engine error: key is not found, err: %v, key: %s, value:%s", err, uuid, string(v))
 	}
 	if err := oa.verify(ctx, token, uuid); err != nil {
-		fmt.Println(11, err)
 		return nil, err
 	}
 	return v, nil
 }
 
+func (oa *OneAccount) error(ctx context.Context, err error) {
+	if err != nil && oa.ErrorListener != nil {
+		oa.ErrorListener(ctx, err)
+	}
+}
+
 // Auth handles the authentication
 func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 	hfc := func(w http.ResponseWriter, r *http.Request) {
-		if oa == nil || oa.Engine == nil || (oa.CallbackURL != nil && r.URL.Path != *oa.CallbackURL) {
+		ctx := r.Context()
+		if oa == nil || oa.Engine == nil {
+			oa.error(ctx, fmt.Errorf("engine is not provided or the library is not initialised"))
 			next.ServeHTTP(w, r)
 			return
 		}
-		ctx := r.Context()
+		if oa.CallbackURL != nil && r.URL.Path != *oa.CallbackURL {
+			next.ServeHTTP(w, r)
+			return
+		}
 		token, err := BearerFromHeader(r)
 		if err != nil || token == "" {
 			err := oa.save(ctx, r.Body)
 			if err != nil {
-				Error(w, err, http.StatusBadRequest)
+				oa.error(ctx, err)
+				Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
 				return
 			}
 			JSON(w, "{success: true}")
@@ -187,13 +202,15 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 		body := requestBody{}
 		err = json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
-			Error(w, err, http.StatusBadRequest)
+			oa.error(ctx, fmt.Errorf("cannot decode body: %v", err))
+			Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
 			return
 		}
 
 		data, err := oa.authorize(ctx, r, token, body.UUID)
 		if err != nil {
-			Error(w, err, http.StatusBadRequest)
+			oa.error(ctx, fmt.Errorf("cannot authorise: %v", err))
+			Error(w, fmt.Errorf("cannot authorise"), http.StatusBadRequest)
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), DataKey, data))

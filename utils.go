@@ -33,7 +33,11 @@ func JSON(w http.ResponseWriter, v interface{}, status ...int) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(v)
+	err := json.NewEncoder(w).Encode(v)
+	if err != nil {
+		// TODO: log this
+		Error(w, fmt.Errorf("cannot send response"), http.StatusInternalServerError)
+	}
 }
 
 // Error .

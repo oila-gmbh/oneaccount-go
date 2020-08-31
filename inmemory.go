@@ -69,7 +69,7 @@ func (i *InMemoryEngine) Get(ctx context.Context, k string) ([]byte, error) {
 		i.RLock()
 		v, ok := i.AuthorizingUsers[k]
 		i.RUnlock()
-		if !ok || v.ExpiresAt.Before(time.Now()){
+		if !ok || v.ExpiresAt.Before(time.Now()) {
 			return nil, fmt.Errorf("no item found or item expired for key: %s", k)
 		}
 		defer func() {

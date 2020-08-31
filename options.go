@@ -8,6 +8,12 @@ import (
 
 type option func(oa *OneAccount)
 
+func SetOnErrorListener(errorListener ErrorListener) func(oa *OneAccount) {
+	return func(oa *OneAccount) {
+		oa.ErrorListener = errorListener
+	}
+}
+
 func SetEngine(e Engine) func(oa *OneAccount) {
 	return func(oa *OneAccount) {
 		oa.Engine = e
