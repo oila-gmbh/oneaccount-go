@@ -90,6 +90,8 @@ type OneaccountRedisEngine struct {
 }
 
 func (ore OneaccountRedisEngine) Set(ctx context.Context, k string, v []byte) error {
+    // for best results the timeout should match the timeout 
+    // set in frontend (updateInterval option, default: 3 minutes)
     return ore.client.Set(ctx, k, v, 3 * time.Minute).Err()
 }
 
