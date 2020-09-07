@@ -18,9 +18,9 @@ import (
     "github.com/oilastudio/oneaccount-go"
 )
 
-// The route URL is the callback URL you have set when you created One account app.
 func main() {
     var oa = oneaccount.New()
+    // The route URL is the callback URL you have set when you created One account app.
     http.Handle("/oneaccountauth", oa.Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if !oneaccount.IsAuthenticated(r) {
             return
@@ -59,26 +59,27 @@ We will be using redis for these examples: https://github.com/go-redis/redis
 #### Example 2 (Custom Engine functions):
 ```go
 func main() {
-	var redisClient = redis.NewClient(&redis.Options{})
-	var oa = oneaccount.New(
-		oneaccount.SetEngineSetter(func(ctx context.Context, k string, v []byte) error {
-			// for best results the timeout should match the timeout 
-			// set in frontend (updateInterval option, default: 3 minutes)
-			return redisClient.Set(ctx, k, v, 3 * time.Minute).Err()
-		}),
-		oneaccount.SetEngineGetter(func(ctx context.Context, k string) ([]byte, error) {
-			v, err := redisClient.Get(ctx, k).Result()
-			if err != nil {
-				return nil, err
-			}
-			return []byte(v), redisClient.Del(ctx, k).Err()
-		}),
+    var redisClient = redis.NewClient(&redis.Options{})
+    var oa = oneaccount.New(
+        oneaccount.SetEngineSetter(func(ctx context.Context, k string, v []byte) error {
+            // for best results the timeout should match the timeout 
+        	// set in frontend (updateInterval option, default: 3 minutes)
+        	return redisClient.Set(ctx, k, v, 3 * time.Minute).Err()
+        }),
+        oneaccount.SetEngineGetter(func(ctx context.Context, k string) ([]byte, error) {
+            v, err := redisClient.Get(ctx, k).Result()
+            if err != nil {
+                return nil, err
+            }
+            return []byte(v), redisClient.Del(ctx, k).Err()
+        }),
 	)
-	http.Handle("/oneaccountauth", oa.Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !oneaccount.IsAuthenticated(r) {
-			return
-		}
-	})))
+    // The route URL is the callback URL you have set when you created One account app. 
+    http.Handle("/oneaccountauth", oa.Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if !oneaccount.IsAuthenticated(r) {
+            return
+        }
+    })))
 }
 ```
 Now our authentication is production ready!
@@ -91,7 +92,7 @@ type OneaccountRedisEngine struct {
 
 func (ore OneaccountRedisEngine) Set(ctx context.Context, k string, v []byte) error {
     // for best results the timeout should match the timeout 
-    // set in frontend (updateInterval option, default: 3 minutes)
+    // set in frontend (updateInterval option, default: 3 minutes) 
     return ore.client.Set(ctx, k, v, 3 * time.Minute).Err()
 }
 
@@ -108,6 +109,7 @@ func main() {
     var oa = oneaccount.New(
         oneaccount.SetEngine(&OneaccountRedisEngine{client: redisClient}),
     )
+    // The route URL is the callback URL you have set when you created One account app.
     http.Handle("/oneaccountauth", oa.Auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if !oneaccount.IsAuthenticated(r) {
             return
