@@ -38,6 +38,7 @@ type Engine interface {
 	Get(ctx context.Context, k string) ([]byte, error)
 }
 
+// OneAccount struct to handle middleware logic
 type OneAccount struct {
 	Engine             Engine
 	GetterSetterEngine *GetterSetterEngine
@@ -64,6 +65,7 @@ func httpClient() *http.Client {
 	return netClient
 }
 
+// New returns an instances of OneAccount middleware
 func New(options ...option) *OneAccount {
 	oa := OneAccount{}
 	for _, option := range options {
@@ -181,17 +183,17 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if oa.CallbackURL != nil && r.URL.Path != *oa.CallbackURL {
+		if oa.CallbackURL != nil && strings.Trim(r.URL.Path, "/") != *oa.CallbackURL {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		body, err := ioutil.ReadAll(r.Body)
-        if err != nil {
-            oa.error(ctx, fmt.Errorf("cannot decode body,  body: %s, err:%v", string(body), err))
-            Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
-            return
-        }
+		if err != nil {
+			oa.error(ctx, fmt.Errorf("cannot decode body,  body: %s, err:%v", string(body), err))
+			Error(w, fmt.Errorf("incorrect data is sent"), http.StatusBadRequest)
+			return
+		}
 
 		token, err := BearerFromHeader(r)
 		if err != nil || token == "" {
@@ -227,6 +229,8 @@ func (oa *OneAccount) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(hfc)
 }
 
+// IsAuthenticated return true if user is authenticated through One account service
+// false otherwise
 func IsAuthenticated(r *http.Request) bool {
 	return Data(r) != nil
 }

@@ -9,16 +9,19 @@ import (
 
 const ExpireTimeDuration = 1 * time.Minute
 
+// AuthorizingUser represents an in memory object for authorising users
 type AuthorizingUser struct {
 	ExpiresAt time.Time
 	Data      []byte
 }
 
+// InMemoryEngine is a cache in-memory engine
 type InMemoryEngine struct {
 	AuthorizingUsers map[string]AuthorizingUser
 	sync.RWMutex
 }
 
+// NewInMemoryEngine return an instance of InMemoryEngine
 func NewInMemoryEngine() *InMemoryEngine {
 	i := &InMemoryEngine{}
 	i.AuthorizingUsers = make(map[string]AuthorizingUser)
@@ -41,6 +44,7 @@ func NewInMemoryEngine() *InMemoryEngine {
 	return i
 }
 
+// Set stores an authorising user in memory
 func (i *InMemoryEngine) Set(ctx context.Context, k string, v []byte) error {
 	// we don't need a sophisticated way to handle context here, so we just check
 	// if it is already cancelled and return if it is otherwise ignore the context and proceed
@@ -59,6 +63,7 @@ func (i *InMemoryEngine) Set(ctx context.Context, k string, v []byte) error {
 	return nil
 }
 
+// Get retrieves an authorising user from memory
 func (i *InMemoryEngine) Get(ctx context.Context, k string) ([]byte, error) {
 	// we don't need a sophisticated way to handle context here, so we just check
 	// if it is already cancelled and return if it is otherwise ignore the context and proceed

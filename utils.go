@@ -9,7 +9,7 @@ import (
 )
 
 // BearerFromHeader method
-// retrieves token from BEARER header
+// retrieves token from Authorization header
 func BearerFromHeader(r *http.Request) (string, error) {
 
 	auth := r.Header.Get("Authorization")
@@ -24,7 +24,7 @@ func BearerFromHeader(r *http.Request) (string, error) {
 	return t, nil
 }
 
-// JSON .
+// JSON is a convenient function to return a json
 func JSON(w http.ResponseWriter, v interface{}, status ...int) {
 	if len(status) > 0 {
 		w.WriteHeader(status[0])
@@ -40,7 +40,7 @@ func JSON(w http.ResponseWriter, v interface{}, status ...int) {
 	}
 }
 
-// Error .
+// Error is a convenient function to return an error
 func Error(w http.ResponseWriter, err error, status ...int) {
 	if err == nil {
 		err = errors.New("unknown error")
